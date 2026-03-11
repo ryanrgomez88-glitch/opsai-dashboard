@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
+import OceanicLog from './OceanicLog';
 import './App.css';
 
 const API_BASE = 'https://web-production-d7336.up.railway.app';
@@ -148,11 +149,25 @@ export default function App() {
         ))}
       </div>
 
-      {/* Loading / Error */}
-      {loading && <div className="center-msg"><div className="spinner" /><span>Loading operations data…</span></div>}
-      {error && <div className="center-msg error">⚠️ Unable to reach Otto API: {error}<br /><small>Check Railway deployment status.</small></div>}
+      {/* Always-visible Tab Bar + OCEAN tab (works offline) */}
+      <div className="tab-bar">
+        {['OVERVIEW', 'TRIPS', 'FLIGHT LOG', 'EXPENSES', 'OCEAN'].map(t => (
+          <button key={t} className={`tab-btn${tab === t ? ' active' : ''}${t === 'OCEAN' ? ' tab-btn-ocean' : ''}`} onClick={() => setTab(t)}>{t}</button>
+        ))}
+      </div>
 
-      {data && (
+      {/* OCEAN tab — fully self-contained, no API dependency */}
+      {tab === 'OCEAN' && (
+        <div className="tab-content">
+          <OceanicLog />
+        </div>
+      )}
+
+      {/* Loading / Error (only for OPS tabs) */}
+      {tab !== 'OCEAN' && loading && <div className="center-msg"><div className="spinner" /><span>Loading operations data…</span></div>}
+      {tab !== 'OCEAN' && error && <div className="center-msg error">⚠️ Unable to reach Otto API: {error}<br /><small>Check Railway deployment status.</small></div>}
+
+      {tab !== 'OCEAN' && data && (
         <>
           {/* Stat Cards */}
           <div className="stat-cards">
@@ -172,13 +187,6 @@ export default function App() {
               <div className="stat-label">TOTAL LEGS</div>
               <div className="stat-value">{stats.legs}</div>
             </div>
-          </div>
-
-          {/* Tab Bar */}
-          <div className="tab-bar">
-            {['OVERVIEW', 'TRIPS', 'FLIGHT LOG', 'EXPENSES'].map(t => (
-              <button key={t} className={`tab-btn${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>{t}</button>
-            ))}
           </div>
 
           {/* Tab Content */}
