@@ -1,148 +1,281 @@
-import { useNavigate } from 'react-router-dom';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
-} from 'recharts';
 import { useData } from '../lib/DataContext';
 import { fmt$, fmtHrs, fmtDate } from '../lib/fmt';
+import { useNavigate } from 'react-router-dom';
+import {
+  Card, Grid, Col, Metric, Text, Title, BarChart, AreaChart, DonutChart,
+  Flex, BadgeDelta, ProgressBar, Badge
+} from '@tremor/react';
+import { TrendingUp, TrendingDown, Plane, DollarSign, Clock, Target } from 'lucide-react';
 
-function buildMonthlyChart(expenses) {
-  const map = {};
-  for (const e of expenses || []) {
-    if (!e.date) continue;
-    const mo = e.date.slice(0, 7);
-    map[mo] = (map[mo] || 0) + (e.amount || 0);
+function Skeleton({ className = '' }) {
+  return <div className={`skeleton ${className}`} />;
+}
+
+function KpiCard({ label, value, subtext, deltaType, deltaText, icon: Icon, loading }) {
+  if (loading) {
+    return (
+      <Card className="ring-0 shadow-sm">
+        <Skeleton className="h-4 w-24 mb-3" />
+        <Skeleton className="h-8 w-32 mb-2" />
+        <Skeleton className="h-3 w-20" />
+      </Card>
+    );
   }
-  return Object.entries(map)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .slice(-6)
-    .map(([mo, cost]) => ({
-      month: new Date(mo + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
-      cost: Math.round(cost),
-    }));
+  return (
+    <Card className="ring-0 shadow-sm hover:shadow-md transition-shadow">
+      <Flex justifyContent="between" alignItems="start">
+        <div>
+          <Text className="text-slate-500 text-sm">{label}</Text>
+          <Metric className="text-[#1E3A5F] mt-1 font-mono">{value}</Metric>
+          {subtext && <Text className="text-slate-400 text-xs mt-1">{subtext}</Text>}
+        </div>
+        <div className="p-2 bg-blue-50 rounded-lg">
+          <Icon size={18} className="text-[#2196F3]" />
+        </div>
+      </Flex>
+      {deltaType && deltaText && (
+        <Flex className="mt-3">
+          <BadgeDelta deltaType={deltaType} size="xs">{deltaText}</BadgeDelta>
+        </Flex>
+      )}
+    </Card>
+  );
 }
 
 export default function Home() {
-  const { data, loading, error, getStats, filterByTail, lastRefresh } = useData();
+  const { data, loading, lastRefresh, getStats, filterByTail } = useData();
   const navigate = useNavigate();
-
-  if (loading) return <div className="center-msg"><div className="spinner" /><span>Loading operations data…</span></div>;
-  if (error) return <div className="center-msg error">⚠️ Unable to reach Otto API: {error}<br /><small>Check Railway deployment status.</small></div>;
-  if (!data) return null;
-
   const stats = getStats();
-  const filteredTrips = filterByTail(data.recentTrips);
-  const filteredExpenses = filterByTail(data.expenses);
-  const chartData = buildMonthlyChart(filteredExpenses);
-  const costPerHr = stats.flightHours > 0 ? stats.totalCost / stats.flightHours : 0;
+  const recentTrips = filterByTail(data?.recentTrips || []).slice(0, 8);
+  const expenses = filterByTail(data?.expenses || []);
 
-  // Budget vs actual for 2026
-  const ANNUAL_BUDGET = 4_000_000;
-  const ytdPct = Math.min(100, (stats.totalCost / ANNUAL_BUDGET) * 100);
+  // Build monthly spend data from expenses
+  const monthlyData = buildMonthlyData(expenses);
+
+  // Build category data for donut
+  const categoryData = buildCategoryData(expenses);
+
+  // Budget 2026 targets
+  const BUDGET_TOTAL = 4000000;
+  const budgetPct = stats.totalCost > 0 ? Math.round((stats.totalCost / BUDGET_TOTAL) * 100) : 0;
+
+  const costPerHour = stats.flightHours > 0 ? stats.totalCost / stats.flightHours : 0;
+  const TARGET_CPH = 12308;
 
   return (
-    <div className="page-content">
-      {lastRefresh && (
-        <div className="page-refresh-note">
-          Last updated: {lastRefresh.toLocaleTimeString()} · Auto-refresh every 60s
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-bold text-[#1E3A5F]">Operations Dashboard</h1>
+          <p className="text-slate-500 text-sm mt-0.5">N45BP · 2026 Fiscal Year</p>
         </div>
+        {lastRefresh && (
+          <p className="text-xs text-slate-400 font-mono">
+            Updated {fmtDate(lastRefresh)}
+          </p>
+        )}
+      </div>
+
+      {/* KPI Grid */}
+      <Grid numItemsSm={2} numItemsLg={4} className="gap-4">
+        <Col>
+          <KpiCard
+            label="Total Ops Cost"
+            value={loading ? '—' : fmt$(stats.totalCost)}
+            subtext={`${stats.trips} trips · ${stats.legs} legs`}
+            deltaType="moderateDecrease"
+            deltaText="vs. budget pace"
+            icon={DollarSign}
+            loading={loading}
+          />
+        </Col>
+        <Col>
+          <KpiCard
+            label="Flight Hours"
+            value={loading ? '—' : fmtHrs(stats.flightHours)}
+            subtext={`Block: ${fmtHrs(stats.blockHours)}`}
+            deltaType="moderateIncrease"
+            deltaText="YTD 2026"
+            icon={Clock}
+            loading={loading}
+          />
+        </Col>
+        <Col>
+          <KpiCard
+            label="Cost / Hour"
+            value={loading ? '—' : fmt$(costPerHour)}
+            subtext={`Target: ${fmt$(TARGET_CPH)}/hr`}
+            deltaType={costPerHour <= TARGET_CPH ? 'moderateIncrease' : 'moderateDecrease'}
+            deltaText={costPerHour <= TARGET_CPH ? 'On target' : 'Above target'}
+            icon={TrendingUp}
+            loading={loading}
+          />
+        </Col>
+        <Col>
+          <KpiCard
+            label="Budget Used"
+            value={loading ? '—' : `${budgetPct}%`}
+            subtext={`${fmt$(stats.totalCost)} of ${fmt$(BUDGET_TOTAL)}`}
+            deltaType={budgetPct < 25 ? 'moderateIncrease' : budgetPct < 50 ? 'unchanged' : 'moderateDecrease'}
+            deltaText="Q1 2026"
+            icon={Target}
+            loading={loading}
+          />
+        </Col>
+      </Grid>
+
+      {/* Budget Progress */}
+      {!loading && (
+        <Card className="ring-0 shadow-sm">
+          <Flex>
+            <Title className="text-[#1E3A5F]">2026 Budget Utilization</Title>
+            <Text className="font-mono text-sm">{fmt$(stats.totalCost)} / {fmt$(BUDGET_TOTAL)}</Text>
+          </Flex>
+          <ProgressBar value={budgetPct} color="blue" className="mt-3" />
+          <Flex className="mt-2">
+            <Text className="text-xs text-slate-400">{budgetPct}% used — Q1</Text>
+            <Text className="text-xs text-slate-400">Target: {fmt$(TARGET_CPH)}/hr</Text>
+          </Flex>
+        </Card>
       )}
 
-      {/* KPI Cards */}
-      <div className="stat-cards">
-        <div className="stat-card">
-          <div className="stat-label">TOTAL OPS COST</div>
-          <div className="stat-value">{fmt$(stats.totalCost)}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">FLIGHT HOURS</div>
-          <div className="stat-value">{fmtHrs(stats.flightHours)}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">COST / HR</div>
-          <div className="stat-value">{fmt$(costPerHr)}</div>
-          <div className="stat-sub">target: $12,308/hr</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">2026 BUDGET USED</div>
-          <div className="stat-value">{ytdPct.toFixed(1)}%</div>
-          <div className="budget-mini-bar">
-            <div className="budget-mini-fill" style={{ width: `${ytdPct}%` }} />
+      {/* Charts Row */}
+      <Grid numItemsSm={1} numItemsLg={2} className="gap-4">
+        {/* Monthly Spend */}
+        <Card className="ring-0 shadow-sm">
+          <Title className="text-[#1E3A5F] mb-1">Monthly Ops Cost</Title>
+          <Text className="text-slate-400 text-xs mb-4">Last 6 months — all aircraft</Text>
+          {loading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-48 w-full" />
+            </div>
+          ) : monthlyData.length === 0 ? (
+            <EmptyState message="No expense data yet" />
+          ) : (
+            <BarChart
+              data={monthlyData}
+              index="month"
+              categories={["Cost"]}
+              colors={["blue"]}
+              valueFormatter={(v) => fmt$(v)}
+              showLegend={false}
+              showAnimation
+              className="h-48"
+            />
+          )}
+        </Card>
+
+        {/* Category Donut */}
+        <Card className="ring-0 shadow-sm">
+          <Title className="text-[#1E3A5F] mb-1">Spend by Category</Title>
+          <Text className="text-slate-400 text-xs mb-4">YTD breakdown</Text>
+          {loading ? (
+            <Skeleton className="h-48 w-full" />
+          ) : categoryData.length === 0 ? (
+            <EmptyState message="No expense data yet" />
+          ) : (
+            <DonutChart
+              data={categoryData}
+              index="category"
+              category="amount"
+              valueFormatter={(v) => fmt$(v)}
+              colors={["blue", "amber", "emerald", "rose", "purple", "cyan"]}
+              showAnimation
+              className="h-48"
+            />
+          )}
+        </Card>
+      </Grid>
+
+      {/* Recent Trips */}
+      <Card className="ring-0 shadow-sm">
+        <Title className="text-[#1E3A5F] mb-4">Recent Trips</Title>
+        {loading ? (
+          <div className="space-y-3">
+            {[...Array(5)].map((_, i) => (
+              <Flex key={i} className="gap-3">
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 flex-1" />
+                <Skeleton className="h-4 w-20" />
+              </Flex>
+            ))}
           </div>
-          <div className="stat-sub">{fmt$(stats.totalCost)} of {fmt$(ANNUAL_BUDGET)}</div>
-        </div>
-      </div>
-
-      {/* Secondary KPIs */}
-      <div className="stat-cards" style={{ marginTop: 0 }}>
-        <div className="stat-card">
-          <div className="stat-label">TOTAL TRIPS</div>
-          <div className="stat-value">{stats.trips}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">TOTAL LEGS</div>
-          <div className="stat-value">{stats.legs}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">BLOCK HOURS</div>
-          <div className="stat-value">{fmtHrs(stats.blockHours)}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">AIRCRAFT</div>
-          <div className="stat-value">{data.aircraft?.length || 0}</div>
-        </div>
-      </div>
-
-      {/* Chart + Recent */}
-      <div className="home-grid">
-        <div className="chart-section">
-          <div className="section-title">MONTHLY OPS COST</div>
-          {chartData.length === 0
-            ? <div className="empty-state">No expense data available yet.</div>
-            : (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1a2035" />
-                  <XAxis dataKey="month" tick={{ fill: '#8a9bb8', fontSize: 11 }} />
-                  <YAxis
-                    tickFormatter={v => '$' + (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v)}
-                    tick={{ fill: '#8a9bb8', fontSize: 11 }}
-                  />
-                  <Tooltip
-                    formatter={v => [fmt$(v), 'Cost']}
-                    contentStyle={{ background: '#0d1326', border: '1px solid #c8a84b', borderRadius: 6, color: '#e8eaf0' }}
-                  />
-                  <Bar dataKey="cost" fill="#c8a84b" radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )
-          }
-        </div>
-
-        <div className="recent-section">
-          <div className="section-title">RECENT ACTIVITY</div>
-          <div className="recent-list">
-            {filteredTrips.slice(0, 8).map(t => (
+        ) : recentTrips.length === 0 ? (
+          <EmptyState message="No trips found" />
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {recentTrips.map((trip) => (
               <div
-                key={t.trip_id}
-                className="recent-item clickable"
-                onClick={() => navigate(`/trips/${t.trip_id}`)}
+                key={trip.trip_id || trip.trip_number}
+                className="flex items-center justify-between py-3 cursor-pointer hover:bg-slate-50 -mx-2 px-2 rounded-lg transition-colors group"
+                onClick={() => navigate(`/trips/${trip.trip_id || trip.trip_number}`)}
               >
-                <span className="ri-tail">{t.tail}</span>
-                <span className="ri-trip">{t.trip_number}</span>
-                <span className="ri-route">{t.dep} → {t.arr}</span>
-                <span className="ri-date">{fmtDate(t.date)}</span>
-                <span className={`ri-status ${t.status}`}>{t.status}</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-mono bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                    {trip.trip_number}
+                  </span>
+                  <div>
+                    <p className="text-sm font-medium text-slate-800 group-hover:text-[#2196F3] transition-colors">
+                      {trip.dep} → {trip.arr}
+                    </p>
+                    <p className="text-xs text-slate-400">{fmtDate(trip.date)} · {trip.tail}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <StatusBadge status={trip.status} />
+                  <span className="text-sm font-mono text-slate-600">→</span>
+                </div>
               </div>
             ))}
-            {filteredTrips.length === 0 && <div className="empty-state">No trips recorded yet.</div>}
           </div>
-          {filteredTrips.length > 8 && (
-            <button className="view-all-btn" onClick={() => navigate('/expenses')}>
-              View all expenses →
-            </button>
-          )}
-        </div>
-      </div>
+        )}
+      </Card>
     </div>
   );
+}
+
+function StatusBadge({ status }) {
+  const s = (status || '').toLowerCase();
+  if (s === 'complete' || s === 'completed') return <Badge color="emerald" size="xs">Complete</Badge>;
+  if (s === 'in-progress' || s === 'active') return <Badge color="blue" size="xs">Active</Badge>;
+  if (s === 'planned' || s === 'scheduled') return <Badge color="amber" size="xs">Planned</Badge>;
+  return <Badge color="gray" size="xs">{status || 'Unknown'}</Badge>;
+}
+
+function EmptyState({ message }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <p className="text-slate-400 text-sm">{message}</p>
+    </div>
+  );
+}
+
+function buildMonthlyData(expenses) {
+  const months = {};
+  expenses.forEach(e => {
+    if (!e.date || !e.amount) return;
+    const d = new Date(e.date);
+    if (isNaN(d)) return;
+    const key = d.toLocaleString('en-US', { month: 'short', year: '2-digit' });
+    months[key] = (months[key] || 0) + Number(e.amount);
+  });
+  return Object.entries(months)
+    .sort(([a], [b]) => new Date('1 ' + a) - new Date('1 ' + b))
+    .slice(-6)
+    .map(([month, Cost]) => ({ month, Cost }));
+}
+
+function buildCategoryData(expenses) {
+  const cats = {};
+  expenses.forEach(e => {
+    if (!e.amount) return;
+    const cat = e.category || 'Other';
+    cats[cat] = (cats[cat] || 0) + Number(e.amount);
+  });
+  return Object.entries(cats)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 6)
+    .map(([category, amount]) => ({ category, amount }));
 }

@@ -1,194 +1,196 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useData } from '../lib/DataContext';
 import { fmt$, fmtDate } from '../lib/fmt';
+import {
+  Card, Title, Text, TextInput, Select, SelectItem, Badge, Flex, Button
+} from '@tremor/react';
+import { Search, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+
+function Skeleton({ className = '' }) { return <div className={`skeleton ${className}`} />; }
 
 const PAGE_SIZE = 25;
 
-function exportCSV(rows) {
-  const headers = ['Date', 'Tail', 'Vendor', 'Category', 'Amount', 'Trip', 'Status'];
-  const lines = [
-    headers.join(','),
-    ...rows.map(e => [
-      e.date, e.tail, `"${(e.vendor || '').replace(/"/g, '""')}"`,
-      `"${(e.category || '').replace(/"/g, '""')}"`,
-      e.amount, e.trip_number, e.status
-    ].join(','))
-  ];
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `opsai-expenses-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
 export default function ExpensesPage() {
-  const { data, loading, error, filterByTail } = useData();
+  const { data, loading, filterByTail } = useData();
   const [search, setSearch] = useState('');
-  const [catFilter, setCatFilter] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [sortField, setSortField] = useState('date');
-  const [sortDir, setSortDir] = useState('desc');
+  const [category, setCategory] = useState('');
   const [page, setPage] = useState(1);
+  const [sortKey, setSortKey] = useState('date');
+  const [sortDir, setSortDir] = useState('desc');
 
-  if (loading) return <div className="center-msg"><div className="spinner" /><span>Loading…</span></div>;
-  if (error) return <div className="center-msg error">⚠️ {error}</div>;
-  if (!data) return null;
+  const allExpenses = filterByTail(data?.expenses || []);
 
-  const allExpenses = filterByTail(data.expenses || []);
-
-  // Unique categories and statuses
+  // Unique categories
   const categories = [...new Set(allExpenses.map(e => e.category).filter(Boolean))].sort();
-  const statuses = [...new Set(allExpenses.map(e => e.status).filter(Boolean))].sort();
 
-  const filtered = useMemo(() => {
-    let rows = allExpenses;
-    if (search) {
-      const q = search.toLowerCase();
-      rows = rows.filter(e =>
-        (e.vendor || '').toLowerCase().includes(q) ||
-        (e.trip_number || '').toLowerCase().includes(q) ||
-        (e.category || '').toLowerCase().includes(q)
-      );
-    }
-    if (catFilter) rows = rows.filter(e => e.category === catFilter);
-    if (statusFilter) rows = rows.filter(e => e.status === statusFilter);
-    if (dateFrom) rows = rows.filter(e => e.date >= dateFrom);
-    if (dateTo) rows = rows.filter(e => e.date <= dateTo);
+  // Filter
+  let filtered = allExpenses.filter(e => {
+    const q = search.toLowerCase();
+    const matchSearch = !q ||
+      (e.vendor || '').toLowerCase().includes(q) ||
+      (e.trip_number || '').toLowerCase().includes(q) ||
+      (e.category || '').toLowerCase().includes(q) ||
+      (e.description || '').toLowerCase().includes(q);
+    const matchCat = !category || e.category === category;
+    return matchSearch && matchCat;
+  });
 
-    rows = [...rows].sort((a, b) => {
-      let av = a[sortField] ?? '';
-      let bv = b[sortField] ?? '';
-      if (sortField === 'amount') { av = Number(av); bv = Number(bv); }
-      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
-      return sortDir === 'asc' ? cmp : -cmp;
-    });
+  // Sort
+  filtered = [...filtered].sort((a, b) => {
+    let av = a[sortKey] || '';
+    let bv = b[sortKey] || '';
+    if (sortKey === 'amount') { av = Number(av); bv = Number(bv); }
+    if (av < bv) return sortDir === 'asc' ? -1 : 1;
+    if (av > bv) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
 
-    return rows;
-  }, [allExpenses, search, catFilter, statusFilter, dateFrom, dateTo, sortField, sortDir]);
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const total = filtered.reduce((s, e) => s + Number(e.amount || 0), 0);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const pageRows = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const totalAmount = filtered.reduce((s, e) => s + (e.amount || 0), 0);
-
-  function toggleSort(field) {
-    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setSortField(field); setSortDir('desc'); }
+  function handleSort(key) {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir('desc'); }
     setPage(1);
   }
 
-  function SortArrow({ field }) {
-    if (sortField !== field) return <span className="sort-arrow muted">↕</span>;
-    return <span className="sort-arrow active">{sortDir === 'asc' ? '↑' : '↓'}</span>;
+  function exportCSV() {
+    const header = ['Date', 'Tail', 'Trip', 'Vendor', 'Category', 'Amount', 'Status'];
+    const rows = filtered.map(e => [
+      e.date, e.tail, e.trip_number, e.vendor, e.category, e.amount, e.status
+    ]);
+    const csv = [header, ...rows].map(r => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `expenses-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
   }
 
-  function resetFilters() {
-    setSearch(''); setCatFilter(''); setDateFrom(''); setDateTo(''); setStatusFilter(''); setPage(1);
+  function SortTh({ label, k }) {
+    return (
+      <th
+        className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide py-3 px-3 cursor-pointer select-none hover:text-slate-800 transition-colors"
+        onClick={() => handleSort(k)}
+      >
+        {label} {sortKey === k ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+      </th>
+    );
   }
 
   return (
-    <div className="page-content">
-      {/* Filters */}
-      <div className="filter-section">
-        <input
-          className="filter-input"
-          placeholder="Search vendor, trip, category…"
-          value={search}
-          onChange={e => { setSearch(e.target.value); setPage(1); }}
-        />
-        <select className="filter-select" value={catFilter} onChange={e => { setCatFilter(e.target.value); setPage(1); }}>
-          <option value="">All Categories</option>
-          {categories.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select className="filter-select" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}>
-          <option value="">All Statuses</option>
-          {statuses.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <input
-          className="filter-input date-input"
-          type="date"
-          value={dateFrom}
-          onChange={e => { setDateFrom(e.target.value); setPage(1); }}
-          title="From date"
-        />
-        <input
-          className="filter-input date-input"
-          type="date"
-          value={dateTo}
-          onChange={e => { setDateTo(e.target.value); setPage(1); }}
-          title="To date"
-        />
-        <button className="filter-btn" onClick={resetFilters}>RESET</button>
-        <button className="filter-btn active" onClick={() => exportCSV(filtered)}>CSV ↓</button>
+    <div className="space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-[#1E3A5F]">Expense Log</h1>
+          <p className="text-slate-500 text-sm mt-0.5">
+            {filtered.length} records · {fmt$(total)} total
+          </p>
+        </div>
+        <Button size="sm" variant="secondary" icon={Download} onClick={exportCSV}>
+          Export CSV
+        </Button>
       </div>
 
-      <div className="filter-summary">
-        {filtered.length} of {allExpenses.length} expenses · Total: {fmt$(totalAmount)}
-      </div>
+      {/* Filters */}
+      <Card className="ring-0 shadow-sm">
+        <Flex className="gap-3 flex-col sm:flex-row">
+          <TextInput
+            icon={Search}
+            placeholder="Search vendor, trip, category…"
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(1); }}
+            className="flex-1"
+          />
+          <Select
+            value={category}
+            onValueChange={v => { setCategory(v); setPage(1); }}
+            placeholder="All categories"
+            className="w-full sm:w-48"
+          >
+            <SelectItem value="">All categories</SelectItem>
+            {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+          </Select>
+        </Flex>
+      </Card>
 
       {/* Table */}
-      <div className="table-wrap">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th onClick={() => toggleSort('date')} className="sortable">DATE <SortArrow field="date" /></th>
-              <th>TAIL</th>
-              <th onClick={() => toggleSort('vendor')} className="sortable">VENDOR <SortArrow field="vendor" /></th>
-              <th onClick={() => toggleSort('category')} className="sortable">CATEGORY <SortArrow field="category" /></th>
-              <th onClick={() => toggleSort('amount')} className="sortable">AMOUNT <SortArrow field="amount" /></th>
-              <th onClick={() => toggleSort('trip_number')} className="sortable">TRIP <SortArrow field="trip_number" /></th>
-              <th>STATUS</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pageRows.map(e => (
-              <tr key={e.id}>
-                <td>{fmtDate(e.date)}</td>
-                <td className="tail-badge">{e.tail}</td>
-                <td>{e.vendor}</td>
-                <td><span className="cat-tag">{e.category}</span></td>
-                <td className="mono amount">{fmt$(e.amount)}</td>
-                <td className="mono">{e.trip_number}</td>
-                <td><span className={`status-pill ${e.status}`}>{e.status}</span></td>
-              </tr>
-            ))}
-            {pageRows.length === 0 && (
-              <tr><td colSpan={7} className="empty-state">No expenses match the current filters.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <Card className="ring-0 shadow-sm overflow-hidden p-0">
+        {loading ? (
+          <div className="p-4 space-y-3">
+            {[...Array(8)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+          </div>
+        ) : paged.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <p className="text-slate-400 text-sm">No expenses match your filters</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <SortTh label="Date" k="date" />
+                  <SortTh label="Tail" k="tail" />
+                  <SortTh label="Trip" k="trip_number" />
+                  <SortTh label="Vendor" k="vendor" />
+                  <SortTh label="Category" k="category" />
+                  <SortTh label="Amount" k="amount" />
+                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide py-3 px-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {paged.map((e, i) => (
+                  <tr key={e.id || i} className="hover:bg-slate-50 transition-colors">
+                    <td className="py-3 px-3 text-slate-600 font-mono text-xs whitespace-nowrap">{fmtDate(e.date)}</td>
+                    <td className="py-3 px-3">
+                      <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono">{e.tail || '—'}</span>
+                    </td>
+                    <td className="py-3 px-3 text-slate-600 text-xs font-mono">{e.trip_number || '—'}</td>
+                    <td className="py-3 px-3 text-slate-800 font-medium max-w-[160px] truncate">{e.vendor || '—'}</td>
+                    <td className="py-3 px-3 text-slate-500 text-xs">{e.category || '—'}</td>
+                    <td className="py-3 px-3 text-slate-800 font-mono font-semibold text-right whitespace-nowrap">{fmt$(e.amount)}</td>
+                    <td className="py-3 px-3"><ExpenseBadge status={e.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="pagination">
-          <button
-            className="page-btn"
-            onClick={() => setPage(1)}
-            disabled={currentPage === 1}
-          >«</button>
-          <button
-            className="page-btn"
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            disabled={currentPage === 1}
-          >‹</button>
-          <span className="page-info">Page {currentPage} of {totalPages}</span>
-          <button
-            className="page-btn"
-            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-            disabled={currentPage === totalPages}
-          >›</button>
-          <button
-            className="page-btn"
-            onClick={() => setPage(totalPages)}
-            disabled={currentPage === totalPages}
-          >»</button>
-        </div>
-      )}
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="border-t border-slate-200 px-4 py-3 flex items-center justify-between">
+            <Text className="text-xs text-slate-400">
+              Page {page} of {totalPages} · {filtered.length} results
+            </Text>
+            <div className="flex items-center gap-2">
+              <button
+                disabled={page === 1}
+                onClick={() => setPage(p => p - 1)}
+                className="p-1 rounded-md text-slate-400 hover:text-slate-700 disabled:opacity-30"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <button
+                disabled={page === totalPages}
+                onClick={() => setPage(p => p + 1)}
+                className="p-1 rounded-md text-slate-400 hover:text-slate-700 disabled:opacity-30"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+      </Card>
     </div>
   );
+}
+
+function ExpenseBadge({ status }) {
+  const s = (status || '').toLowerCase();
+  if (s === 'paid' || s === 'complete') return <Badge color="emerald" size="xs">Paid</Badge>;
+  if (s === 'pending') return <Badge color="amber" size="xs">Pending</Badge>;
+  if (s === 'disputed') return <Badge color="red" size="xs">Disputed</Badge>;
+  return <Badge color="gray" size="xs">{status || 'Unknown'}</Badge>;
 }
