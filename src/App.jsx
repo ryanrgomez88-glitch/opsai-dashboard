@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { DataProvider } from './lib/DataContext';
 import Nav from './components/Nav';
 import ChatPanel from './components/ChatPanel';
-import Home from './pages/Home';
+import OverviewDashboard from './pages/OverviewDashboard';
 import CalendarPage from './pages/CalendarPage';
 import BudgetPage from './pages/BudgetPage';
 import ExpensesPage from './pages/ExpensesPage';
@@ -21,10 +21,11 @@ const pageVariants = {
 
 function AnimatedRoutes() {
   const location = useLocation();
+  const isOverview = location.pathname === '/';
   return (
     <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
-        <Route path="/" element={<PageWrapper><Home /></PageWrapper>} />
+        <Route path="/" element={<PageWrapper><OverviewDashboard /></PageWrapper>} />
         <Route path="/calendar" element={<PageWrapper><CalendarPage /></PageWrapper>} />
         <Route path="/budget" element={<PageWrapper><BudgetPage /></PageWrapper>} />
         <Route path="/expenses" element={<PageWrapper><ExpensesPage /></PageWrapper>} />
@@ -48,9 +49,24 @@ function PageWrapper({ children }) {
 
 function NotFound() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
-      <p className="text-6xl font-bold text-slate-200 mb-4">404</p>
-      <p className="text-slate-500 text-lg">Page not found</p>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', textAlign: 'center' }}>
+      <p style={{ fontSize: 64, fontWeight: 700, color: 'var(--ink-dim)', marginBottom: 16 }}>404</p>
+      <p style={{ color: 'var(--ink-dim)', fontSize: 18 }}>Page not found</p>
+    </div>
+  );
+}
+
+function InnerApp() {
+  const location = useLocation();
+  const isOverview = location.pathname === '/';
+
+  return (
+    <div style={{ minHeight: '100vh' }}>
+      {!isOverview && <Nav />}
+      <main style={isOverview ? {} : { maxWidth: 1280, margin: '0 auto', padding: '24px 16px' }}>
+        <AnimatedRoutes />
+      </main>
+      {!isOverview && <ChatPanel />}
     </div>
   );
 }
@@ -59,13 +75,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <DataProvider>
-        <div className="min-h-screen bg-[#F8FAFC]">
-          <Nav />
-          <main className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            <AnimatedRoutes />
-          </main>
-          <ChatPanel />
-        </div>
+        <InnerApp />
       </DataProvider>
     </BrowserRouter>
   );

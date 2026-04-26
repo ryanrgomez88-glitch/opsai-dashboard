@@ -51,7 +51,7 @@ export default function BudgetPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-[#1E3A5F]">Budget Tracker</h1>
-        <p className="text-slate-500 text-sm mt-0.5">2026 Annual Plan · N45BP</p>
+        <p className="text-slate-500 text-sm mt-0.5">2026 Annual Plan · All Fleet</p>
       </div>
 
       {/* KPI Cards */}

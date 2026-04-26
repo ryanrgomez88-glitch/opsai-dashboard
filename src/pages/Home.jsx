@@ -68,7 +68,7 @@ export default function Home() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold text-[#1E3A5F]">Operations Dashboard</h1>
-          <p className="text-slate-500 text-sm mt-0.5">N45BP · 2026 Fiscal Year</p>
+          <p className="text-slate-500 text-sm mt-0.5">All Fleet · 2026 Fiscal Year</p>
         </div>
         {lastRefresh && (
           <p className="text-xs text-slate-400 font-mono">
