@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useData } from '../lib/DataContext';
-import { Plane, BarChart2, Calendar, DollarSign, List, Briefcase, Waves, Menu, X, RefreshCw } from 'lucide-react';
+import { Plane, BarChart2, Calendar, DollarSign, List, Briefcase, Waves, Menu, X, RefreshCw, MapPin } from 'lucide-react';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: BarChart2 },
+  { to: '/trips', label: 'Trips', icon: MapPin },
   { to: '/budget', label: 'Budget', icon: DollarSign },
   { to: '/expenses', label: 'Expenses', icon: List },
   { to: '/flight-log', label: 'Flight Log', icon: Plane },

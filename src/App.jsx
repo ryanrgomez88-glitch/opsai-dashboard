@@ -9,6 +9,7 @@ import BudgetPage from './pages/BudgetPage';
 import ExpensesPage from './pages/ExpensesPage';
 import FlightLogPage from './pages/FlightLogPage';
 import TripDetailPage from './pages/TripDetailPage';
+import AllTripsPage from './pages/AllTripsPage';
 import JobsPage from './pages/JobsPage';
 import OceanicLog from './OceanicLog';
 import './App.css';
@@ -30,6 +31,7 @@ function AnimatedRoutes() {
         <Route path="/budget" element={<PageWrapper><BudgetPage /></PageWrapper>} />
         <Route path="/expenses" element={<PageWrapper><ExpensesPage /></PageWrapper>} />
         <Route path="/flight-log" element={<PageWrapper><FlightLogPage /></PageWrapper>} />
+        <Route path="/trips" element={<PageWrapper><AllTripsPage /></PageWrapper>} />
         <Route path="/trips/:id" element={<PageWrapper><TripDetailPage /></PageWrapper>} />
         <Route path="/jobs" element={<PageWrapper><JobsPage /></PageWrapper>} />
         <Route path="/ocean" element={<PageWrapper><OceanicLog /></PageWrapper>} />

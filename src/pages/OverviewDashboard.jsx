@@ -689,7 +689,7 @@ function TripList({ trips, filter, loading, navigate }) {
           Recent Trips · {acLabel} · {entLabel}
         </span>
         <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, textTransform: 'uppercase' }}>
-          <span style={{ color: 'var(--blue)', fontWeight: 500, cursor: 'pointer' }}>View all →</span>
+          <span style={{ color: 'var(--blue)', fontWeight: 500, cursor: 'pointer' }} onClick={() => navigate('/trips')}>View all →</span>
         </span>
       </div>
 
